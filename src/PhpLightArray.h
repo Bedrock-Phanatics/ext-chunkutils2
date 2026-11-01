@@ -1,9 +1,18 @@
 #ifndef HAVE_PHP_LIGHT_ARRAY_H
 #define HAVE_PHP_LIGHT_ARRAY_H
 
+#include "lib/LightArray.h"
+
 extern "C" {
 #include "php.h"
 }
+
+typedef struct {
+	LightArray lightArray;
+	zend_object std;
+} light_array_obj;
+
+extern zend_class_entry* light_array_entry;
 
 PHP_METHOD(PhpLightArray, __construct);
 PHP_METHOD(PhpLightArray, fill);

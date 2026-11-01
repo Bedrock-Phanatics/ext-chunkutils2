@@ -15,11 +15,6 @@ extern "C" {
 zend_class_entry* light_array_entry;
 static zend_object_handlers light_array_handlers;
 
-typedef struct {
-	LightArray lightArray;
-	zend_object std;
-} light_array_obj;
-
 /* internal object handlers */
 
 static zend_object* light_array_new(zend_class_entry* class_type) {
