@@ -43,6 +43,14 @@ PHP_MINIT_FUNCTION(chunkutils2)
 }
 /* }}} */
 
+PHP_RINIT_FUNCTION(chunkutils2)
+{
+#if defined(ZTS) && defined(COMPILE_DL_CHUNKUTILS2)
+	ZEND_TSRMLS_CACHE_UPDATE();
+#endif
+	return SUCCESS;
+}
+
 /* {{{ PHP_MINFO_FUNCTION
  */
 PHP_MINFO_FUNCTION(chunkutils2)
@@ -61,7 +69,7 @@ zend_module_entry chunkutils2_module_entry = {
 	NULL,
 	PHP_MINIT(chunkutils2),
 	NULL, /* MSHUTDOWN */
-	NULL, /* RINIT */
+	PHP_RINIT(chunkutils2),
 	NULL, /* RSHUTDOWN */
 	PHP_MINFO(chunkutils2),
 	PHP_CHUNKUTILS2_VERSION,
