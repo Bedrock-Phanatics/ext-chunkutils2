@@ -30,6 +30,9 @@ final class LightEngine{
 
 	public function recalculateSkyNode(int $x, int $y, int $z) : ?int{}
 
+	/** @param int[][] $changes */
+	public function applyChanges(array $changes) : void{}
+
 	public function recalculateBlockChunk(int $chunkX, int $chunkZ) : int{}
 
 	public function recalculateSkyChunk(int $chunkX, int $chunkZ) : int{}

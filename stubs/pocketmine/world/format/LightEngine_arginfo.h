@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 012d26bc0408697b769b924ff1203508a8b9d2d6 */
+ * Stub hash: ea1cebcb8a53ae9608711a5f0612665a853211cf */
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_pocketmine_world_format_LightEngine___construct, 0, 0, 3)
 	ZEND_ARG_TYPE_INFO(0, lightFilters, IS_ARRAY, 0)
@@ -47,6 +47,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_Li
 	ZEND_ARG_TYPE_INFO(0, z, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_LightEngine_applyChanges, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, changes, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_LightEngine_recalculateBlockChunk, 0, 2, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, chunkX, IS_LONG, 0)
 	ZEND_ARG_TYPE_INFO(0, chunkZ, IS_LONG, 0)
@@ -67,6 +71,7 @@ ZEND_METHOD(pocketmine_world_format_LightEngine, clear);
 ZEND_METHOD(pocketmine_world_format_LightEngine, getHeightMap);
 ZEND_METHOD(pocketmine_world_format_LightEngine, recalculateBlockNode);
 ZEND_METHOD(pocketmine_world_format_LightEngine, recalculateSkyNode);
+ZEND_METHOD(pocketmine_world_format_LightEngine, applyChanges);
 ZEND_METHOD(pocketmine_world_format_LightEngine, recalculateBlockChunk);
 ZEND_METHOD(pocketmine_world_format_LightEngine, recalculateSkyChunk);
 ZEND_METHOD(pocketmine_world_format_LightEngine, executeBlock);
@@ -81,6 +86,7 @@ static const zend_function_entry class_pocketmine_world_format_LightEngine_metho
 	ZEND_ME(pocketmine_world_format_LightEngine, getHeightMap, arginfo_class_pocketmine_world_format_LightEngine_getHeightMap, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_LightEngine, recalculateBlockNode, arginfo_class_pocketmine_world_format_LightEngine_recalculateBlockNode, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_LightEngine, recalculateSkyNode, arginfo_class_pocketmine_world_format_LightEngine_recalculateSkyNode, ZEND_ACC_PUBLIC)
+	ZEND_ME(pocketmine_world_format_LightEngine, applyChanges, arginfo_class_pocketmine_world_format_LightEngine_applyChanges, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_LightEngine, recalculateBlockChunk, arginfo_class_pocketmine_world_format_LightEngine_recalculateBlockChunk, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_LightEngine, recalculateSkyChunk, arginfo_class_pocketmine_world_format_LightEngine_recalculateSkyChunk, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_LightEngine, executeBlock, arginfo_class_pocketmine_world_format_LightEngine_executeBlock, ZEND_ACC_PUBLIC)

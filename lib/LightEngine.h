@@ -36,6 +36,14 @@ public:
 		bool blocksDirectSkyLight = false;
 	};
 
+	struct Change {
+		int32_t x;
+		int32_t y;
+		int32_t z;
+		Block before;
+		Block after;
+	};
+
 private:
 	static const int8_t NOT_VISITED = -2;
 	static const int8_t SEED = -1;
@@ -64,6 +72,7 @@ private:
 		std::unique_ptr<Scratch> scratch;
 		bool nodesUsed[2] = {false, false};
 		bool visitsUsed = false;
+		bool overlaid = false;
 	};
 
 	struct Column {
@@ -105,6 +114,10 @@ private:
 	std::vector<Node> nodes[2];
 	std::vector<Slot *> nodeSlots[2];
 	std::vector<Slot *> visitedSlots;
+
+	//blocks as they were at the change being replayed, keyed by slot and index
+	std::unordered_map<uint64_t, Block> overlay;
+	std::vector<Slot *> overlaidSlots;
 
 	static int64_t columnKey(int32_t x, int32_t z) {
 		return static_cast<int64_t>((static_cast<uint64_t>(static_cast<uint32_t>(x)) << 32) | static_cast<uint32_t>(z));
@@ -179,8 +192,28 @@ private:
 		return (slot.words[index / slot.blocksPerWord] >> ((index % slot.blocksPerWord) * slot.bitsPerBlock)) & slot.mask;
 	}
 
+	static uint64_t overlayKey(const Slot &slot, unsigned index) {
+		return (static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&slot)) << 12) | index;
+	}
+
+	bool overlaidBlock(const Slot &slot, unsigned index, Block &block) const {
+		if (!slot.overlaid) {
+			return false;
+		}
+		auto found = overlay.find(overlayKey(slot, index));
+		if (found == overlay.end()) {
+			return false;
+		}
+		block = found->second;
+		return true;
+	}
+
 	//SubChunk::getBlockStateId(), which reads the first layer or falls back to the empty block
 	Block blockAt(Slot &slot, unsigned index) {
+		Block block;
+		if (overlaidBlock(slot, index, block)) {
+			return block;
+		}
 		check(slot);
 		if (slot.blocks == nullptr) {
 			return slot.emptyBlockId;
@@ -189,13 +222,37 @@ private:
 		return offset < slot.palette.size() ? slot.palette[offset] : slot.emptyBlockId;
 	}
 
-	const Properties &propertiesAt(Slot &slot, unsigned index) {
+	Properties propertiesAt(Slot &slot, unsigned index) {
+		Block block;
+		if (overlaidBlock(slot, index, block)) {
+			return lookup(block);
+		}
 		check(slot);
 		if (slot.blocks == nullptr) {
 			return slot.emptyProperties;
 		}
 		unsigned offset = paletteOffset(slot, index);
 		return offset < slot.paletteProperties.size() ? slot.paletteProperties[offset] : slot.emptyProperties;
+	}
+
+	void setOverlay(int32_t x, int32_t y, int32_t z, Block block) {
+		Slot *slot = slotAt(x, y, z);
+		if (slot == nullptr) {
+			return;
+		}
+		if (!slot->overlaid) {
+			slot->overlaid = true;
+			overlaidSlots.push_back(slot);
+		}
+		overlay[overlayKey(*slot, localIndex(x, y, z))] = block;
+	}
+
+	void clearOverlay() {
+		for (Slot *slot : overlaidSlots) {
+			slot->overlaid = false;
+		}
+		overlaidSlots.clear();
+		overlay.clear();
 	}
 
 	static int lightAt(const Slot &slot, Type type, unsigned index) {
@@ -276,7 +333,7 @@ private:
 	int highestBlock(Column &column, int x, int z, int fromSubChunk = MAX_SUBCHUNK) {
 		for (int subChunkY = fromSubChunk; subChunkY >= MIN_SUBCHUNK; --subChunkY) {
 			Slot &slot = column.slots[subChunkY - MIN_SUBCHUNK];
-			if (slot.blocks == nullptr) {
+			if (slot.blocks == nullptr && !slot.overlaid) {
 				continue;
 			}
 			for (int y = 15; y >= 0; --y) {
@@ -597,6 +654,27 @@ public:
 			}
 		}
 		return lightSources;
+	}
+
+	/**
+	 * Queues the same nodes as running both recalculateNode() after each change, in order, while the changes were being
+	 * made. The arrays must already hold the blocks after all changes. Each changed position reads as it was at that
+	 * point of the sequence, without touching the arrays.
+	 */
+	void applyChanges(const std::vector<Change> &changes) {
+		struct OverlayGuard {
+			LightEngine &engine;
+			~OverlayGuard() { engine.clearOverlay(); }
+		} guard{*this};
+
+		for (auto change = changes.rbegin(); change != changes.rend(); ++change) {
+			setOverlay(change->x, change->y, change->z, change->before);
+		}
+		for (const Change &change : changes) {
+			setOverlay(change.x, change.y, change.z, change.after);
+			recalculateSkyNode(change.x, change.y, change.z);
+			recalculateBlockNode(change.x, change.y, change.z);
+		}
 	}
 
 	//LightUpdate::execute(); queued nodes are consumed

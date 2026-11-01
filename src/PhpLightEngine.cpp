@@ -384,6 +384,72 @@ LIGHT_ENGINE_METHOD(recalculateSkyNode) {
 	RETURN_LONG(height);
 }
 
+static bool read_block_state(zval *value, Block &block) {
+	ZVAL_DEREF(value);
+	if (Z_TYPE_P(value) != IS_LONG || Z_LVAL_P(value) < 0 || static_cast<zend_ulong>(Z_LVAL_P(value)) > UINT32_MAX) {
+		return false;
+	}
+	block = static_cast<Block>(Z_LVAL_P(value));
+	return true;
+}
+
+static bool read_change(zval *entry, NormalLightEngine::Change &change) {
+	ZVAL_DEREF(entry);
+	if (Z_TYPE_P(entry) != IS_ARRAY || zend_hash_num_elements(Z_ARRVAL_P(entry)) != 5) {
+		return false;
+	}
+	zend_long coords[3];
+	for (zend_ulong i = 0; i < 3; ++i) {
+		zval *coord = zend_hash_index_find(Z_ARRVAL_P(entry), i);
+		if (coord == nullptr) {
+			return false;
+		}
+		ZVAL_DEREF(coord);
+		if (Z_TYPE_P(coord) != IS_LONG) {
+			return false;
+		}
+		coords[i] = Z_LVAL_P(coord);
+	}
+	zval *before = zend_hash_index_find(Z_ARRVAL_P(entry), 3);
+	zval *after = zend_hash_index_find(Z_ARRVAL_P(entry), 4);
+	if (
+		!valid_block_coords(coords[0], coords[1], coords[2]) ||
+		before == nullptr || !read_block_state(before, change.before) ||
+		after == nullptr || !read_block_state(after, change.after)
+	) {
+		return false;
+	}
+	change.x = static_cast<int32_t>(coords[0]);
+	change.y = static_cast<int32_t>(coords[1]);
+	change.z = static_cast<int32_t>(coords[2]);
+	return true;
+}
+
+LIGHT_ENGINE_METHOD(applyChanges) {
+	HashTable *changes;
+
+	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
+		Z_PARAM_ARRAY_HT(changes)
+	ZEND_PARSE_PARAMETERS_END();
+
+	try {
+		std::vector<NormalLightEngine::Change> parsed(zend_hash_num_elements(changes));
+		size_t i = 0;
+		zval *entry;
+		ZEND_HASH_FOREACH_VAL(changes, entry) {
+			if (!read_change(entry, parsed[i++])) {
+				zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Changes must be lists of x, y, z, the previous block state ID and the new one");
+				RETURN_THROWS();
+			}
+		} ZEND_HASH_FOREACH_END();
+
+		state_of(getThis()).engine.applyChanges(parsed);
+	} catch (std::exception &e) {
+		zend_throw_exception(zend_ce_exception, e.what(), 0);
+		RETURN_THROWS();
+	}
+}
+
 static void recalculate_chunk(INTERNAL_FUNCTION_PARAMETERS, NormalLightEngine::Type type) {
 	zend_long chunkX, chunkZ;
 
