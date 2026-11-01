@@ -12,7 +12,6 @@
 #include <exception>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 #include <vector>
 #include <gsl/span>
 
@@ -244,20 +243,32 @@ public:
 	}
 
 	unsigned short countUniqueBlocks() const {
-		std::unordered_set<Block> hasFound;
-
-		for (Coord x = 0; x < Base::ARRAY_DIM; ++x) {
-			for (Coord z = 0; z < Base::ARRAY_DIM; ++z) {
-				for (Coord y = 0; y < Base::ARRAY_DIM; ++y) {
-					auto inserted = hasFound.insert(palette[_getPaletteOffset(x, y, z)]).second;
-					if (inserted && hasFound.size() == getPaletteSize()) {
-						break;
-					}
+		//finds the palette offsets in use straight from the words, stopping once every offset has turned up
+		std::array<bool, MAX_PALETTE_SIZE> used{};
+		unsigned short usedCount = 0;
+		const unsigned short paletteSize = nextPaletteIndex;
+		unsigned int index = 0;
+		for (unsigned short wordIdx = 0; wordIdx < WORD_COUNT && usedCount < paletteSize; ++wordIdx) {
+			const Word word = words[wordIdx];
+			for (unsigned char i = 0; i < BLOCKS_PER_WORD && index < Base::ARRAY_CAPACITY; ++i, ++index) {
+				const unsigned short offset = (word >> (i * BITS_PER_BLOCK_INT)) & BLOCK_MASK;
+				if (offset < paletteSize && !used[offset]) {
+					used[offset] = true;
+					++usedCount;
 				}
 			}
 		}
 
-		return hasFound.size();
+		//replaceAll() can leave the same block at several offsets
+		std::array<Block, MAX_PALETTE_SIZE> blocks;
+		unsigned short blockCount = 0;
+		for (unsigned short offset = 0; offset < paletteSize; ++offset) {
+			if (used[offset]) {
+				blocks[blockCount++] = palette[offset];
+			}
+		}
+		std::sort(blocks.begin(), blocks.begin() + blockCount);
+		return static_cast<unsigned short>(std::unique(blocks.begin(), blocks.begin() + blockCount) - blocks.begin());
 	}
 
 	VanillaPaletteSize getBitsPerBlock() const {
