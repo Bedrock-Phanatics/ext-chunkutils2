@@ -270,11 +270,12 @@ LIGHT_ENGINE_METHOD(setChunk) {
 			if (value != nullptr) {
 				ZVAL_DEREF(value);
 			}
-			if (value == nullptr ||Z_TYPE_P(value) != IS_LONG || Z_LVAL_P(value) < NormalLightEngine::MIN_Y || Z_LVAL_P(value) > NormalLightEngine::MAX_Y) {
-				zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Height map must hold 256 integers between %d and %d", NormalLightEngine::MIN_Y, NormalLightEngine::MAX_Y);
+			if (value == nullptr || Z_TYPE_P(value) != IS_LONG) {
+				zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "Height map must hold 256 integers");
 				RETURN_THROWS();
 			}
-			heights[i] = static_cast<int32_t>(Z_LVAL_P(value));
+			//heights outside the world mean nothing to light, so they're treated as its edges
+			heights[i] = static_cast<int32_t>(std::max<zend_long>(NormalLightEngine::MIN_Y, std::min<zend_long>(NormalLightEngine::MAX_Y, Z_LVAL_P(value))));
 		}
 
 		LightEngineState &state = state_of(getThis());

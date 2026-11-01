@@ -40,9 +40,13 @@ attempt(fn() => $engine->setChunk(0, 0, $empty, array_replace($blocks, [3 => Lig
 attempt(fn() => $engine->setChunk(0, 0, $empty, $blocks, array_replace($light, [3 => null]), $sky, $heightMap));
 attempt(fn() => $engine->setChunk(0, 0, array_replace($empty, [0 => -5]), $blocks, $light, $sky, $heightMap));
 attempt(fn() => $engine->setChunk(0, 0, $empty, $blocks, $light, $sky, array_fill(0, 255, 0)));
-attempt(fn() => $engine->setChunk(0, 0, $empty, $blocks, $light, $sky, array_fill(0, 256, 321)));
+attempt(fn() => $engine->setChunk(0, 0, $empty, $blocks, $light, $sky, array_replace($heightMap, [7 => "64"])));
 attempt(fn() => $engine->setChunk(1 << 30, 0, $empty, $blocks, $light, $sky, $heightMap));
 var_dump($engine->hasChunk(0, 0));
+
+$engine->setChunk(2, 2, $empty, $blocks, $light, $sky, array_replace($heightMap, [0 => PHP_INT_MIN, 1 => 321, 2 => PHP_INT_MAX]));
+var_dump(array_slice($engine->getHeightMap(2, 2), 0, 4));
+$engine->removeChunk(2, 2);
 
 attempt(fn() => $engine->recalculateBlockChunk(0, 0));
 attempt(fn() => $engine->recalculateSkyChunk(5, 5));
@@ -65,10 +69,20 @@ InvalidArgumentException: Block light is missing subchunk 7
 InvalidArgumentException: Blocks subchunk 3 must be a pocketmine\world\format\PalettedBlockArray
 InvalidArgumentException: Block light subchunk 3 must be a pocketmine\world\format\LightArray
 InvalidArgumentException: Empty block ID for subchunk 0 must be an integer between 0 and 4294967295
-InvalidArgumentException: Height map must hold 256 integers between -64 and 320
-InvalidArgumentException: Height map must hold 256 integers between -64 and 320
+InvalidArgumentException: Height map must hold 256 integers
+InvalidArgumentException: Height map must hold 256 integers
 InvalidArgumentException: Chunk coordinates must be within +-67108864
 bool(false)
+array(4) {
+  [0]=>
+  int(-64)
+  [1]=>
+  int(320)
+  [2]=>
+  int(320)
+  [3]=>
+  int(0)
+}
 InvalidArgumentException: Chunk 0 0 is not registered
 InvalidArgumentException: Chunk 5 5 is not registered
 InvalidArgumentException: Chunk 0 0 is not registered
