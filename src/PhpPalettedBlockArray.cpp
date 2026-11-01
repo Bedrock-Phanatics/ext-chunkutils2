@@ -72,7 +72,12 @@ static void paletted_block_array_get_bits_per_block(zval *object, zval *return_v
 static void paletted_block_array_get_word_array(zval *object, zval *return_value) {
 	auto span = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(object))->container.getWordArray();
 
-	ZVAL_STRINGL(return_value, span.data(), span.size());
+	//single-block arrays have no words, and their span has no data pointer to copy from
+	if (span.size() == 0) {
+		ZVAL_EMPTY_STRING(return_value);
+	} else {
+		ZVAL_STRINGL(return_value, span.data(), span.size());
+	}
 }
 
 static void paletted_block_array_get_palette(zval *object, zval *return_value) {
