@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: e51985f89aec70ea0dc5bdc23e7067886264b3f9 */
+ * Stub hash: 4fe7c13a98dedd91dd796dd270d9351e51f1dcbf */
 
 ZEND_BEGIN_ARG_INFO_EX(arginfo_class_pocketmine_world_format_PalettedBlockArray___construct, 0, 0, 1)
 	ZEND_ARG_TYPE_INFO(0, fillEntry, IS_LONG, 0)
@@ -15,6 +15,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_Pa
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_PalettedBlockArray_getPalette, 0, 0, IS_ARRAY, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_PalettedBlockArray_setPalette, 0, 1, IS_VOID, 0)
+	ZEND_ARG_TYPE_INFO(0, palette, IS_ARRAY, 0)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_PalettedBlockArray_getMaxPaletteSize, 0, 0, IS_LONG, 0)
@@ -48,11 +52,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_pocketmine_world_format_Pa
 	ZEND_ARG_TYPE_INFO(0, bitsPerBlock, IS_LONG, 0)
 ZEND_END_ARG_INFO()
 
-
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, __construct);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, fromData);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, getWordArray);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, getPalette);
+ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, setPalette);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, getMaxPaletteSize);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, getBitsPerBlock);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, get);
@@ -61,12 +65,12 @@ ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, replaceAll);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, collectGarbage);
 ZEND_METHOD(pocketmine_world_format_PalettedBlockArray, getExpectedWordArraySize);
 
-
 static const zend_function_entry class_pocketmine_world_format_PalettedBlockArray_methods[] = {
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, __construct, arginfo_class_pocketmine_world_format_PalettedBlockArray___construct, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, fromData, arginfo_class_pocketmine_world_format_PalettedBlockArray_fromData, ZEND_ACC_PUBLIC|ZEND_ACC_STATIC)
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, getWordArray, arginfo_class_pocketmine_world_format_PalettedBlockArray_getWordArray, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, getPalette, arginfo_class_pocketmine_world_format_PalettedBlockArray_getPalette, ZEND_ACC_PUBLIC)
+	ZEND_ME(pocketmine_world_format_PalettedBlockArray, setPalette, arginfo_class_pocketmine_world_format_PalettedBlockArray_setPalette, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, getMaxPaletteSize, arginfo_class_pocketmine_world_format_PalettedBlockArray_getMaxPaletteSize, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, getBitsPerBlock, arginfo_class_pocketmine_world_format_PalettedBlockArray_getBitsPerBlock, ZEND_ACC_PUBLIC)
 	ZEND_ME(pocketmine_world_format_PalettedBlockArray, get, arginfo_class_pocketmine_world_format_PalettedBlockArray_get, ZEND_ACC_PUBLIC)

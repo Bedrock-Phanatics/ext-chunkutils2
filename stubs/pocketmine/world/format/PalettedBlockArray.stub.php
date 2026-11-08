@@ -12,6 +12,7 @@ final class PalettedBlockArray{
 
 	/**
 	 * @param int[] $palette
+	 * @throws PalettedBlockArrayLoadException if the provided data is invalid in any way
 	 */
 	public static function fromData(int $bitsPerBlock, string $wordArray, array $palette) : \pocketmine\world\format\PalettedBlockArray{}
 
@@ -21,6 +22,13 @@ final class PalettedBlockArray{
 	 * @return int[]
 	 */
 	public function getPalette() : array{}
+
+	/**
+	 * The input array must be the same size as the current palette
+	 * Keys are ignored. Only input order is considered.
+	 * @param int[] $palette
+	 */
+	public function setPalette(array $palette) : void{}
 
 	public function getMaxPaletteSize() : int{}
 

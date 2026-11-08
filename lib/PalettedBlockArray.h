@@ -12,10 +12,12 @@
 #include <exception>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <gsl/span>
 
 #include "VanillaPaletteSize.h"
+#include "Palette.h"
 
 template<typename Block>
 class IPalettedBlockArray {
@@ -43,6 +45,7 @@ public:
 	virtual const gsl::span<const char> getWordArray() const = 0;
 
 	virtual const gsl::span<const Block> getPalette() const = 0;
+	virtual void setPalette(const gsl::span<Block>& newPalette) = 0;
 	virtual unsigned short getPaletteSize() const = 0;
 	virtual unsigned short getMaxPaletteSize() const = 0;
 
@@ -76,16 +79,20 @@ private:
 	static const unsigned short WORD_COUNT = Base::ARRAY_CAPACITY / BLOCKS_PER_WORD + (Base::ARRAY_CAPACITY % BLOCKS_PER_WORD ? 1 : 0);
 
 	static const unsigned int MAX_PALETTE_OFFSET = 1 << BITS_PER_BLOCK_INT;
+
 public:
 	static const unsigned int PAYLOAD_SIZE = WORD_COUNT * sizeof(Word);
-	static const unsigned int MAX_PALETTE_SIZE = MAX_PALETTE_OFFSET < Base::ARRAY_CAPACITY ? MAX_PALETTE_OFFSET : Base::ARRAY_CAPACITY;
+	static const size_t MAX_PALETTE_SIZE = MAX_PALETTE_OFFSET < Base::ARRAY_CAPACITY ? MAX_PALETTE_OFFSET : Base::ARRAY_CAPACITY;
 private:
+	using Palette = std::conditional_t<
+		BITS_PER_BLOCK >= VanillaPaletteSize::BPB_6,
+		LargePalette<MAX_PALETTE_SIZE, Block>,
+		SmallPalette<MAX_PALETTE_SIZE, Block>
+	>;
+
 	std::array<Word, WORD_COUNT> words;
 
-	//TODO: use a vector for this instead of a fixed array? might be less performant but will save memory for large formats
-	std::array<Block, MAX_PALETTE_SIZE> palette;
-
-	unsigned short nextPaletteIndex = 0;
+	Palette palette;
 
 	inline unsigned short getArrayOffset(Coord x, Coord y, Coord z) const {
 		return
@@ -120,6 +127,8 @@ private:
 	void locateAndReportInvalidOffset() const {
 		//Slow path, to allow giving detailed errors when a problem has already been detected by the fast path
 		auto blockCount = 0;
+		const auto max = palette.size();
+
 		for (auto wordIdx = 0; wordIdx < words.size(); wordIdx++) {
 			const auto word = words[wordIdx];
 			for (
@@ -128,7 +137,7 @@ private:
 				blockCount++, shift += BITS_PER_BLOCK_INT
 			) {
 				const auto offset = (word >> shift) & BLOCK_MASK;
-				if (offset >= nextPaletteIndex) {
+				if (offset >= max) {
 					std::ostringstream ss;
 
 					const auto blockIdx = (wordIdx * BLOCKS_PER_WORD) + (shift / BITS_PER_BLOCK_INT);
@@ -136,7 +145,7 @@ private:
 					const auto z = (blockIdx >> Base::COORD_BIT_SIZE) & Base::COORD_MASK;
 					const auto y = blockIdx & Base::COORD_MASK;
 
-					ss << "offset table contains invalid offset " << offset << " at position " << x << "," << y << "," << z << " (max valid offset: " << (nextPaletteIndex - 1) << ")";
+					ss << "offset table contains invalid offset " << offset << " at position " << x << "," << y << "," << z << " (max valid offset: " << (max - 1) << ")";
 					throw std::range_error(ss.str());
 				}
 			}
@@ -151,8 +160,9 @@ private:
 		Word invalid = 0;
 
 		Word expected = 0;
+		int max = palette.size();
 		for (unsigned int shift = 0; shift < BLOCKS_PER_WORD * BITS_PER_BLOCK_INT; shift += BITS_PER_BLOCK_INT) {
-			expected |= ((nextPaletteIndex - 1) << shift);
+			expected |= ((max - 1) << shift);
 		}
 
 		//Fast path - use carry-out vectors to detect invalid offsets
@@ -175,7 +185,7 @@ private:
 	}
 
 	void validate() const {
-		if (MAX_PALETTE_OFFSET == MAX_PALETTE_SIZE && nextPaletteIndex >= MAX_PALETTE_SIZE) {
+		if (MAX_PALETTE_OFFSET == MAX_PALETTE_SIZE && palette.size() >= MAX_PALETTE_SIZE) {
 			//Every possible offset representable is valid, therefore no validation is required
 			//this is an uncommon case, but more frequent in small palettes, which is a win because small palettes are more
 			//expensive to verify than big ones due to more bitwise operations needed to extract the offsets
@@ -193,36 +203,24 @@ private:
 
 public:
 
-	PalettedBlockArray(Block block) {
+	PalettedBlockArray(Block block) : palette(block) {
 		memset(words.data(), 0, sizeof(words));
-		palette[nextPaletteIndex++] = block;
 	}
 
-	PalettedBlockArray(gsl::span<uint8_t> &wordArray, std::vector<Block> &paletteEntries) {
+	PalettedBlockArray(gsl::span<uint8_t> &wordArray, std::vector<Block> &paletteEntries) : palette(paletteEntries) {
 		if (wordArray.size() != sizeof(words)) {
 			//TODO: known-size span can replace this check
 			throw std::length_error("word array size should be exactly " + std::to_string(sizeof(words)) + " bytes for a " + std::to_string(BITS_PER_BLOCK_INT) + "bpb block array, got " + std::to_string(wordArray.size()) + " bytes");
 		}
-		if (paletteEntries.size() > MAX_PALETTE_SIZE) {
-			throw std::length_error("palette size should be at most " + std::to_string(MAX_PALETTE_SIZE) + " entries for a " + std::to_string(BITS_PER_BLOCK_INT) + "bpb block array, got " + std::to_string(paletteEntries.size()) + " entries");
-		}
-		if (paletteEntries.size() == 0) {
-			throw std::length_error("palette cannot have a zero size");
-		}
-
 		memcpy(words.data(), wordArray.data(), sizeof(words));
-		memcpy(palette.data(), paletteEntries.data(), paletteEntries.size() * sizeof(Block));
-		nextPaletteIndex = (unsigned short)paletteEntries.size();
 
 		validate();
 
 		this->mayNeedGC = true;
 	}
 
-	PalettedBlockArray(const PalettedBlockArray &otherArray) {
+	PalettedBlockArray(const PalettedBlockArray &otherArray) : palette(otherArray.palette) {
 		memcpy(words.data(), otherArray.words.data(), sizeof(words));
-		memcpy(palette.data(), otherArray.palette.data(), sizeof(palette));
-		nextPaletteIndex = otherArray.nextPaletteIndex;
 		this->mayNeedGC = otherArray.mayNeedGC;
 	}
 
@@ -231,11 +229,23 @@ public:
 	}
 
 	const gsl::span<const Block> getPalette() const {
-		return gsl::span<const Block>(palette.data(), nextPaletteIndex);
+		return palette.getPalette();
+	}
+
+	void setPalette(const gsl::span<Block>& newPalette) {
+		if (newPalette.size() != palette.size()) {
+			throw std::length_error(
+				"new palette must be the same size as the old one, expected " +
+				std::to_string(palette.size()) +
+				" but received " +
+				std::to_string(newPalette.size())
+			);
+		}
+		palette = Palette(newPalette);
 	}
 
 	unsigned short getPaletteSize() const {
-		return nextPaletteIndex;
+		return palette.size();
 	}
 
 	unsigned short getMaxPaletteSize() const {
@@ -246,7 +256,7 @@ public:
 		//finds the palette offsets in use straight from the words, stopping once every offset has turned up
 		std::array<bool, MAX_PALETTE_SIZE> used{};
 		unsigned short usedCount = 0;
-		const unsigned short paletteSize = nextPaletteIndex;
+		const unsigned short paletteSize = static_cast<unsigned short>(palette.size());
 		unsigned int index = 0;
 		for (unsigned short wordIdx = 0; wordIdx < WORD_COUNT && usedCount < paletteSize; ++wordIdx) {
 			const Word word = words[wordIdx];
@@ -264,7 +274,7 @@ public:
 		unsigned short blockCount = 0;
 		for (unsigned short offset = 0; offset < paletteSize; ++offset) {
 			if (used[offset]) {
-				blocks[blockCount++] = palette[offset];
+				blocks[blockCount++] = palette.get(offset);
 			}
 		}
 		std::sort(blocks.begin(), blocks.begin() + blockCount);
@@ -277,37 +287,25 @@ public:
 
 	Block get(Coord x, Coord y, Coord z) const {
 		unsigned short offset = _getPaletteOffset(x, y, z);
-		assert(offset < nextPaletteIndex);
-		return palette[offset];
+		assert(offset < palette.size());
+		return palette.get(offset);
 	}
 
 	bool set(Coord x, Coord y, Coord z, Block val) {
-		//TODO (suggested by sandertv): check performance when recording last written block and palette offset - might improve performance for repetetive writes
-
-		short offset = -1;
+		int offset = palette.addOrLookup(val);
 		bool needGC = true;
-		for (short i = 0; i < nextPaletteIndex; ++i) {
-			if (palette[i] == val) {
-				offset = i;
-				break;
-			}
-		}
 
 		if (offset == -1) {
-			if (nextPaletteIndex >= MAX_PALETTE_SIZE) {
-				if (MAX_PALETTE_SIZE < Base::ARRAY_CAPACITY || this->mayNeedGC) {
-					return false;
-				}
-				//overwrite existing offset on fully used, non-dirty palette
-				offset = _getPaletteOffset(x, y, z);
-				//we skip GC because:
-				//- we know this block isn't already in the palette
-				//- we know every block in the array has its own palette entry (palette full and not dirty), therefore we must be overwriting an entry that's only used by 1 block anyway.
-				needGC = false;
-			} else {
-				offset = (short)nextPaletteIndex++;
+			if (MAX_PALETTE_SIZE < Base::ARRAY_CAPACITY || this->mayNeedGC) {
+				return false;
 			}
-			palette[offset] = val;
+			//overwrite existing offset on fully used, non-dirty palette
+			offset = _getPaletteOffset(x, y, z);
+			//we skip GC because:
+			//- we know this block isn't already in the palette
+			//- we know every block in the array has its own palette entry (palette full and not dirty), therefore we must be overwriting an entry that's only used by 1 block anyway.
+			needGC = false;
+			palette.set(offset, val);
 		}
 
 		_setPaletteOffset(x, y, z, offset);
@@ -321,9 +319,9 @@ public:
 
 	void replaceAll(Block from, Block to) {
 		//TODO: clean up any duplicates
-		for (short i = 0; i < nextPaletteIndex; ++i) {
-			if (palette[i] == from) {
-				palette[i] = to;
+		for (short i = 0; i < palette.size(); ++i) {
+			if (palette.get(i) == from) {
+				palette.set(i, to);
 
 				//don't return here, because there might be duplicated block states from previous replace operations
 			}
@@ -346,8 +344,8 @@ private:
 	template<typename BlockArray>
 	void _fastUpsize(const BlockArray& otherArray) {
 		auto otherPalette = otherArray.getPalette();
-		nextPaletteIndex = otherPalette.size();
-		std::copy(otherPalette.data(), otherPalette.data() + otherPalette.size(), palette.data());
+		this->palette = Palette(otherPalette);
+
 		for (Coord x = 0; x < Base::ARRAY_DIM; ++x) {
 			for (Coord z = 0; z < Base::ARRAY_DIM; ++z) {
 				for (Coord y = 0; y < Base::ARRAY_DIM; ++y) {
@@ -417,6 +415,13 @@ public:
 
 	const gsl::span<const Block> getPalette() const {
 		return gsl::span<const Block>(&block, 1);
+	}
+
+	void setPalette(const gsl::span<Block>& newPalette) {
+		if (newPalette.size() != 1) {
+			throw std::length_error("new palette must be the same size as the old one, expected 1 but received " + std::to_string(newPalette.size()));
+		}
+		block = newPalette[0];
 	}
 
 	unsigned short getPaletteSize() const {

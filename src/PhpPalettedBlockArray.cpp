@@ -6,6 +6,7 @@
 
 #include "PhpPalettedBlockArrayObj.h"
 #include "stubs/pocketmine/world/format/PalettedBlockArray_arginfo.h"
+#include "stubs/pocketmine/world/format/PalettedBlockArrayLoadException_arginfo.h"
 
 extern "C" {
 #include "php.h"
@@ -16,27 +17,23 @@ extern "C" {
 }
 
 zend_class_entry *paletted_block_array_entry;
+zend_class_entry* paletted_block_array_load_exception_entry;
+
 static zend_object_handlers paletted_block_array_handlers;
 
 /* internal object methods */
 
-static inline bool checkPaletteEntrySize(zend_long v) {
+static inline bool checkPaletteEntrySize(zend_long v, zend_class_entry* exception_ce) {
 	Block casted = (Block)v;
 	zend_long castedBack = (zend_long)casted;
 	if (castedBack != v) {
-		zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "value %zd is too large to be used as a palette entry", v);
+		zend_throw_exception_ex(exception_ce, 0, "value %zd is too large to be used as a palette entry", v);
 		return false;
 	}
 	return true;
 }
 
-static bool paletted_block_array_from_data(zval *return_value, zend_long bitsPerBlock, zend_string *wordArrayZstr, HashTable *paletteHt) {
-	object_init_ex(return_value, paletted_block_array_entry);
-	paletted_block_array_obj *intern = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(return_value));
-
-	gsl::span<uint8_t> wordArray((uint8_t*)ZSTR_VAL(wordArrayZstr), (uint8_t*)(ZSTR_VAL(wordArrayZstr) + ZSTR_LEN(wordArrayZstr)));
-	std::vector<Block> palette;
-
+static bool palette_data_from_array(HashTable* paletteHt, std::vector<Block>& palette, zend_class_entry* exception_ce) {
 	HashPosition pos;
 	zval *current;
 	Block b;
@@ -48,11 +45,25 @@ static bool paletted_block_array_from_data(zval *return_value, zend_long bitsPer
 		zend_hash_move_forward_ex(paletteHt, &pos)
 		) {
 
-		if (!checkPaletteEntrySize(Z_LVAL_P(current))) {
+		if (!checkPaletteEntrySize(Z_LVAL_P(current), exception_ce)) {
 			return false;
 		}
 		b = (Block)Z_LVAL_P(current);
 		palette.push_back(b);
+	}
+
+	return true;
+}
+
+static bool paletted_block_array_from_data(zval *return_value, zend_long bitsPerBlock, zend_string *wordArrayZstr, HashTable *paletteHt) {
+	object_init_ex(return_value, paletted_block_array_entry);
+	paletted_block_array_obj *intern = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(return_value));
+
+	gsl::span<uint8_t> wordArray((uint8_t*)ZSTR_VAL(wordArrayZstr), (uint8_t*)(ZSTR_VAL(wordArrayZstr) + ZSTR_LEN(wordArrayZstr)));
+	std::vector<Block> palette;
+
+	if (!palette_data_from_array(paletteHt, palette, paletted_block_array_load_exception_entry)) {
+		return false;
 	}
 
 	try {
@@ -60,7 +71,7 @@ static bool paletted_block_array_from_data(zval *return_value, zend_long bitsPer
 		return true;
 	}
 	catch (std::exception& e) {
-		zend_throw_exception_ex(spl_ce_RuntimeException, 0, "%s", e.what());
+		zend_throw_exception_ex(paletted_block_array_load_exception_entry, 0, "%s", e.what());
 		return false;
 	}
 }
@@ -90,6 +101,24 @@ static void paletted_block_array_get_palette(zval *object, zval *return_value) {
 		zval zv;
 		ZVAL_LONG(&zv, palette[i]);
 		zend_hash_next_index_insert_new(Z_ARRVAL_P(return_value), &zv);
+	}
+}
+
+static bool paletted_block_array_set_palette(zval* object, HashTable* paletteHt) {
+	paletted_block_array_obj* intern = fetch_from_zend_object<paletted_block_array_obj>(Z_OBJ_P(object));
+
+	std::vector<Block> palette;
+	if (!palette_data_from_array(paletteHt, palette, spl_ce_InvalidArgumentException)) {
+		return false;
+	}
+
+	try {
+		intern->container.setPalette(palette);
+		return true;
+	}
+	catch (std::length_error& e) {
+		zend_value_error("%s", e.what());
+		return false;
 	}
 }
 
@@ -214,7 +243,7 @@ PALETTED_BLOCK_ARRAY_METHOD(__construct) {
 		Z_PARAM_LONG(fillEntry)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (!checkPaletteEntrySize(fillEntry)) {
+	if (!checkPaletteEntrySize(fillEntry, spl_ce_InvalidArgumentException)) {
 		return;
 	}
 
@@ -223,7 +252,7 @@ PALETTED_BLOCK_ARRAY_METHOD(__construct) {
 		new(&intern->container) NormalBlockArrayContainer((Block)fillEntry, 0);
 	}
 	catch (std::exception& e) {
-		zend_throw_exception_ex(spl_ce_RuntimeException, 0, "%s", e.what());
+		zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, "%s", e.what());
 	}
 }
 
@@ -251,6 +280,16 @@ PALETTED_BLOCK_ARRAY_METHOD(getPalette) {
 	zend_parse_parameters_none_throw();
 
 	paletted_block_array_get_palette(getThis(), return_value);
+}
+
+PALETTED_BLOCK_ARRAY_METHOD(setPalette) {
+	zval* paletteZarray;
+
+	ZEND_PARSE_PARAMETERS_START_EX(ZEND_PARSE_PARAMS_THROW, 1, 1)
+		Z_PARAM_ARRAY(paletteZarray)
+	ZEND_PARSE_PARAMETERS_END();
+
+	paletted_block_array_set_palette(getThis(), Z_ARRVAL_P(paletteZarray));
 }
 
 PALETTED_BLOCK_ARRAY_METHOD(getMaxPaletteSize) {
@@ -324,6 +363,11 @@ PALETTED_BLOCK_ARRAY_METHOD(getExpectedWordArraySize) {
 		Z_PARAM_LONG(bitsPerBlock)
 	ZEND_PARSE_PARAMETERS_END();
 
+	//TODO: this probably shouldn't be throwing InvalidArgumentException
+	//the parameters given to this function will typically be coming from serialized
+	//data, so it doesn't really make sense to declare them logically invalid
+	//however using a different exception type will break BC
+
 	uint8_t casted = (uint8_t)bitsPerBlock;
 	zend_long castedBack = (zend_long)casted;
 	if (bitsPerBlock != castedBack) {
@@ -340,6 +384,8 @@ PALETTED_BLOCK_ARRAY_METHOD(getExpectedWordArraySize) {
 }
 
 void register_paletted_block_array_class() {
+	paletted_block_array_load_exception_entry = register_class_pocketmine_world_format_PalettedBlockArrayLoadException(spl_ce_RuntimeException);
+
 	memcpy(&paletted_block_array_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
 	paletted_block_array_handlers.offset = XtOffsetOf(paletted_block_array_obj, std);
 	paletted_block_array_handlers.free_obj = paletted_block_array_free;

@@ -7,21 +7,27 @@ on:
 
 jobs:
   build:
-    name: PHP ${{ matrix.php }} (ZTS) Valgrind ${{ matrix.valgrind }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: "!contains(github.event.head_commit.message, '[ci skip]')"
-
+    name: Tests (PHP ${{ matrix.php }}, Valgrind ${{ matrix.valgrind }}, Debug=${{ matrix.debug }}, ZTS=${{ matrix.zts }})
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.0.27', '8.1.14', '8.2.1']
+        php:
+          - 8.1.34
+          - 8.2.30
+          - 8.3.29
+          - 8.4.16
+          - 8.5.0
         valgrind: [0, 1]
+        debug: [enable, disable]
+        zts: [enable, disable]
 
     env:
-      CFLAGS: "-march=x86-64"
-      CXXFLAGS: "-march=x86-64"
+      CFLAGS: "-march=x86-64 -ftree-vectorize -fopt-info-vec"
+      CXXFLAGS: "-march=x86-64 -ftree-vectorize -fopt-info-vec"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Install Valgrind
         if: matrix.valgrind == '1'
@@ -31,25 +37,41 @@ jobs:
           echo "PHP_BUILD_CONFIGURE_OPTS=--with-valgrind" >> $GITHUB_ENV
 
       - name: Restore PHP build cache
+        uses: actions/cache@v5
         id: php-build-cache
-        uses: actions/cache@v3
         with:
-          path: ${{ github.workspace }}/php
-          key: php-build-debug-${{ matrix.php }}-valgrind-${{ matrix.valgrind }}
+          path: ${{ github.workspace }}/php 
+          key: php-${{ matrix.php }}-debug-${{ matrix.debug }}-valgrind-${{ matrix.valgrind }}-zts-${{ matrix.zts }}
 
-      - name: Clone php-build repository
+      - name: Install PHP build dependencies
         if: steps.php-build-cache.outputs.cache-hit != 'true'
-        uses: actions/checkout@v3
-        with:
-          repository: pmmp/php-build
-          path: php-build
+        run: |
+          sudo apt-get update && sudo apt-get install \
+            re2c
+
+      - name: Get number of CPU cores
+        if: steps.php-build-cache.outputs.cache-hit != 'true'
+        uses: SimenB/github-actions-cpu-cores@v2
+        id: cpu-cores
+
+      - name: Download PHP
+        if: steps.php-build-cache.outputs.cache-hit != 'true'
+        working-directory: /tmp
+        run: curl -L https://github.com/php/php-src/archive/refs/tags/php-${{ matrix.php }}.tar.gz | tar -xz
 
       - name: Compile PHP
         if: steps.php-build-cache.outputs.cache-hit != 'true'
+        working-directory: /tmp/php-src-php-${{ matrix.php }}
         run: |
-          cd $GITHUB_WORKSPACE/php-build
-          ./install-dependencies.sh
-          PHP_BUILD_ZTS_ENABLE=on PHP_BUILD_CONFIGURE_OPTS="$PHP_BUILD_CONFIGURE_OPTS --enable-debug" ./bin/php-build ${{ matrix.php }} $GITHUB_WORKSPACE/php
+          ./buildconf --force
+          ./configure \
+            --disable-all \
+            --enable-cli \
+            --${{ matrix.zts }}-zts \
+            --${{ matrix.debug}}-debug \
+            "$PHP_BUILD_CONFIGURE_OPTS" \
+            --prefix="${{ github.workspace }}/php"
+          make -j ${{ steps.cpu-cores.outputs.count }} install
 
       - name: Dump PHP info
         run: $GITHUB_WORKSPACE/php/bin/php -i
@@ -65,9 +87,9 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v6
         with:
-          name: test-results-${{ matrix.php }}-valgrind-${{ matrix.valgrind }}
+          name: test-results-${{ matrix.php }}-debug-${{ matrix.debug }}-valgrind-${{ matrix.valgrind }}-zts-${{ matrix.zts }}
           path: |
             ${{ github.workspace }}/tests/*
             !${{ github.workspace }}/tests/*.phpt
